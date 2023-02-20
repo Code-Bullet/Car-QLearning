@@ -6,7 +6,7 @@ Requirements (versions are mostly here as an indication):
 Pyglet (1.5.27)
 Pygame (2.1.3)
 numpy (1.24.1)
-tensorflow (2.10.1)
+tensorflow (2.10.1) (no 1.X tensorflow)
 ```
 
 How to use : 
