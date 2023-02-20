@@ -1,26 +1,18 @@
-import pyglet
-from pyglet.gl import *
-import pygame
-import math
 from pyglet.window import key
-from Drawer import Drawer
-# from PygameAdditionalMethods import *
-from ShapeObjects import Line
-import tensorflow as tf  # Deep Learning library
-import numpy as np  # Handle matrices
-from collections import deque
+from pyglet.gl import *
+import pyglet
+from Global import *
+import pygame
+from Games import Game
 import random
 import os
-from Globals import displayHeight, displayWidth
-from Game import Game
+import numpy as np
+from collections import deque
+import tensorflow as tf
 
-frameRate = 30.0
+tf.compat.v1.disable_eager_execution()
 
 vec2 = pygame.math.Vector2
-
-"""
-a line which the car object cannot touch
-"""
 
 
 class QLearning:
@@ -31,7 +23,7 @@ class QLearning:
 
         self.stateSize = [game.state_size]
         self.actionSize = game.no_of_actions
-        self.learningRate = 0.00025
+        self.learningRate = 0.00030 #default 0.00025
         self.possibleActions = np.identity(self.actionSize, dtype=int)
 
         self.totalTrainingEpisodes = 100000
@@ -51,10 +43,10 @@ class QLearning:
 
         self.maxTau = 10000
         self.tau = 0
-        # reset the graph i guess, I don't know why therefore is already a graph happening but who cares
-        tf.reset_default_graph()
+        # reset the graph i guess, I don't know why there is already a graph happening but who cares
+        tf.compat.v1.reset_default_graph()
 
-        self.sess = tf.Session()
+        self.sess = tf.compat.v1.Session()
 
         self.DQNetwork = DQN(self.stateSize, self.actionSize, self.learningRate, name='DQNetwork')
         self.TargetNetwork = DQN(self.stateSize, self.actionSize, self.learningRate, name='TargetNetwork')
@@ -68,15 +60,15 @@ class QLearning:
         self.newEpisode = False
         self.stepNo = 0
         self.episodeNo = 0
-        self.saver = tf.train.Saver()
+        self.saver = tf.compat.v1.train.Saver()
 
         load = False
-        loadFromEpisodeNo = 6300
+        loadFromEpisodeNo = 15800
         if load:
             self.episodeNo = loadFromEpisodeNo
-            self.saver.restore(self.sess, "./allModels/model{}/models/model.ckpt".format(self.episodeNo))
+            self.saver.restore(self.sess, "./allModels/modelMatin{}/models/model.ckpt".format(self.episodeNo))
         else:
-            self.sess.run(tf.global_variables_initializer())
+            self.sess.run(tf.compat.v1.global_variables_initializer())
         # self.sess.graph.finalize()
         self.sess.run(self.update_target_graph())
 
@@ -86,10 +78,10 @@ class QLearning:
     def update_target_graph(self):
 
         # Get the parameters of our DQNNetwork
-        from_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "DQNetwork")
+        from_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, "DQNetwork")
 
         # Get the parameters of our Target_network
-        to_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "TargetNetwork")
+        to_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, "TargetNetwork")
 
         op_holder = []
 
@@ -107,13 +99,15 @@ class QLearning:
             # choice = random.randInt(self.actionSize)
             # action = self.possibleActions[choice]
             action = random.choice(self.possibleActions)
+            #print(action)
             actionNo = np.argmax(action)
+            #print(actionNo)
             # now we need to get next state
             reward = self.game.make_action(actionNo)
             nextState = self.game.get_state()
             self.newEpisode = False
 
-            if self.game.is_episode_finished():
+            if self.game.is_episode_finished(): #if car is dead
                 reward = -100
                 self.memoryBuffer.store((state, action, reward, nextState, True))
                 self.game.new_episode()
@@ -121,6 +115,7 @@ class QLearning:
                 self.newEpisode = True
             else:
                 self.memoryBuffer.store((state, action, reward, nextState, False))
+                self.game.render()
                 state = nextState
 
         print("pretrainingDone")
@@ -159,14 +154,16 @@ class QLearning:
             reward = self.game.make_action(actionNo)
 
             nextState = self.game.get_state()
-
+            #window.clear()
+            #self.game.render()
             if (reward > 0):
-                print("Hell YEAH, Reward {}".format(reward))
+                #print("Hell YEAH, Reward {}".format(reward))
+                pass
             # if car is dead then finish episode
             if self.game.is_episode_finished():
                 reward = -100
                 self.stepNo = self.maxSteps
-                print("DEAD!! Reward =  -100")
+                #print("DEAD!! Reward =  -100")
 
             # print("Episode {} Step {} Action {} reward {} epsilon {} experiences stored {}"
             #       .format(self.episodeNo, self.stepNo, actionNo, reward, epsilon, self.trainingStepNo))
@@ -272,32 +269,32 @@ class DQN:
         self.learningRate = learningRate
         self.name = name
 
-        with tf.variable_scope(self.name):
+        with tf.compat.v1.variable_scope(self.name):
             # the inputs describing the state
-            self.inputs_ = tf.placeholder(tf.float32, [None, *self.stateSize], name="inputs")
+            self.inputs_ = tf.compat.v1.placeholder(tf.float32, [None, *self.stateSize], name="inputs")
 
             # the one hotted action that we took
             # e.g. if we took the 3rd action action_ = [0,0,1,0,0,0,0]
-            self.actions_ = tf.placeholder(tf.float32, [None, self.actionSize], name="actions")
+            self.actions_ = tf.compat.v1.placeholder(tf.float32, [None, self.actionSize], name="actions")
 
             # the target = reward + the discounted maximum possible q value of hte next state
-            self.targetQ = tf.placeholder(tf.float32, [None], name="target")
+            self.targetQ = tf.compat.v1.placeholder(tf.float32, [None], name="target")
 
-            self.ISWeights_ = tf.placeholder(tf.float32, [None, 1], name='ISWeights')
+            self.ISWeights_ = tf.compat.v1.placeholder(tf.float32, [None, 1], name='ISWeights')
 
-            self.dense1 = tf.layers.dense(inputs=self.inputs_,
+            self.dense1 = tf.compat.v1.layers.dense(inputs=self.inputs_,
                                           units=16,
                                           activation=tf.nn.elu,
-                                          kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                          kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                           name="dense1")
-            self.dense2 = tf.layers.dense(inputs=self.dense1,
+            self.dense2 = tf.compat.v1.layers.dense(inputs=self.dense1,
                                           units=16,
                                           activation=tf.nn.elu,
-                                          kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                          kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                           name="dense2")
-            self.output = tf.layers.dense(inputs=self.dense2,
+            self.output = tf.compat.v1.layers.dense(inputs=self.dense2,
                                           units=self.actionSize,
-                                          kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                          kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                           activation=None,
                                           name="outputs")
 
@@ -311,7 +308,7 @@ class DQN:
             self.loss = tf.reduce_mean(self.ISWeights_ * tf.square(self.targetQ - self.QValue))
 
             # use adam optimiser (its good shit)
-            self.optimizer = tf.train.AdamOptimizer(self.learningRate).minimize(self.loss)
+            self.optimizer = tf.compat.v1.train.AdamOptimizer(self.learningRate).minimize(self.loss)
 
 
 class DDQN:
@@ -321,53 +318,53 @@ class DDQN:
         self.learningRate = learningRate
         self.name = name
 
-        with tf.variable_scope(self.name):
+        with tf.compat.v1.variable_scope(self.name):
             # the inputs describing the state
-            self.inputs_ = tf.placeholder(tf.float32, [None, *self.stateSize], name="inputs")
+            self.inputs_ = tf.compat.v1.placeholder(tf.float32, [None, *self.stateSize], name="inputs")
 
             # the one hotted action that we took
             # e.g. if we took the 3rd action action_ = [0,0,1,0,0,0,0]
-            self.actions_ = tf.placeholder(tf.float32, [None, self.actionSize], name="actions")
+            self.actions_ = tf.compat.v1.placeholder(tf.float32, [None, self.actionSize], name="actions")
 
             # the target = reward + the discounted maximum possible q value of hte next state
-            self.targetQ = tf.placeholder(tf.float32, [None], name="target")
+            self.targetQ = tf.compat.v1.placeholder(tf.float32, [None], name="target")
 
-            self.ISWeights_ = tf.placeholder(tf.float32, [None, 1], name='ISWeights')
+            self.ISWeights_ = tf.compat.v1.placeholder(tf.float32, [None, 1], name='ISWeights')
 
-            self.dense1 = tf.layers.dense(inputs=self.inputs_,
+            self.dense1 = tf.compat.v1.layers.dense(inputs=self.inputs_,
                                           units=16,
                                           activation=tf.nn.elu,
-                                          kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                          kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                           name="dense1")
 
             ## Here we separate into two streams
             # The one that calculate V(s) which is the value of the input state
             # in other words how good this state is
 
-            self.valueLayer = tf.layers.dense(inputs=self.dense1,
+            self.valueLayer = tf.compat.v1.layers.dense(inputs=self.dense1,
                                               units=16,
                                               activation=tf.nn.elu,
-                                              kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                              kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                               name="valueLayer")
 
-            self.value = tf.layers.dense(inputs=self.valueLayer,
+            self.value = tf.compat.v1.layers.dense(inputs=self.valueLayer,
                                          units=1,
                                          activation=None,
-                                         kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                         kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                          name="value")
 
             # The one that calculate A(s,a)
             # which is the advantage of taking each action in this given state
-            self.advantageLayer = tf.layers.dense(inputs=self.dense1,
+            self.advantageLayer = tf.compat.v1.layers.dense(inputs=self.dense1,
                                                   units=16,
                                                   activation=tf.nn.elu,
-                                                  kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                                  kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                                   name="advantageLayer")
 
-            self.advantage = tf.layers.dense(inputs=self.advantageLayer,
+            self.advantage = tf.compat.v1.layers.dense(inputs=self.advantageLayer,
                                              units=self.actionSize,
                                              activation=None,
-                                             kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                             kernel_initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
                                              name="advantages")
 
             # Aggregating layer
@@ -386,7 +383,7 @@ class DDQN:
             self.loss = tf.reduce_mean(self.ISWeights_ * tf.square(self.targetQ - self.QValue))
 
             # use adam optimiser (its good shit)
-            self.optimizer = tf.train.AdamOptimizer(self.learningRate).minimize(self.loss)
+            self.optimizer = tf.compat.v1.train.AdamOptimizer(self.learningRate).minimize(self.loss)
 
 
 class PrioritisedMemory:
@@ -529,10 +526,8 @@ class SumTree:
 
 
 """
-
 a class inheriting from the pyglet window class which controls the game window and acts as the main class of the program
 """
-
 
 class MyWindow(pyglet.window.Window):
     def __init__(self, *args, **kwargs):
@@ -540,121 +535,43 @@ class MyWindow(pyglet.window.Window):
         self.set_minimum_size(400, 300)
 
         # set background color
-        backgroundColor = [0, 0, 0, 255]
-        backgroundColor = [i / 255 for i in backgroundColor]
+        backgroundColor = [0,0,0,1]
         glClearColor(*backgroundColor)
-        # load background image
+
         self.game = Game()
         self.ai = QLearning(self.game)
 
-    """
-    called when a key is hit
-    """
+        self.firstClick = True
 
     def on_key_press(self, symbol, modifiers):
         pass
-        # if symbol == key.RIGHT:
-        #     self.car.turningRight = True
-        #
-        # if symbol == key.LEFT:
-        #     self.car.turningLeft = True
-        #
-        # if symbol == key.UP:
-        #     self.car.accelerating = True
-        #
-        # if symbol == key.DOWN:
-        #     self.car.reversing = True
-
-    """
-    called when a key is released
-    """
 
     def on_close(self):
         self.ai.sess.close()
+        pass
 
     def on_key_release(self, symbol, modifiers):
-        pass
-        # if symbol == key.RIGHT:
-        #     self.car.turningRight = False
-        #
-        # if symbol == key.LEFT:
-        #     self.car.turningLeft = False
-        #
-        # if symbol == key.UP:
-        #     self.car.accelerating = False
-        #
-        # if symbol == key.DOWN:
-        #     self.car.reversing = False
-        #
-        # if symbol == key.SPACE:
-        #     self.ai.training = not self.ai.training
+        if symbol == key.SPACE:
+            self.ai.training = not self.ai.training
 
     def on_mouse_press(self, x, y, button, modifiers):
-        # # print(x,y)
-        # if self.firstClick:
-        #     self.clickPos = [x, y]
-        # else:
-        #     # print("self.walls.append(Wall({}, {}, {}, {}))".format(self.clickPos[0],
-        #     #                                                        displayHeight - self.clickPos[1],
-        #     #                                                        x, displayHeight - y))
-        #
-        #     # self.gates.append(RewardGate(self.clickPos[0], self.clickPos[1], x, y))
-        #
-        # self.firstClick = not self.firstClick
         pass
 
-    """
-    called every frame
-    """
-
     def on_draw(self):
+        window.set_size(width=displayWidth, height=displayHeight)
+        self.clear()
         self.game.render()
-        #
-        # glPushMatrix()
-        #
-        # glTranslatef(-1, -1, 0)
-        # glScalef(1 / (displayWidth / 2), 1 / (displayHeight / 2), 1)
-        #
-        # self.clear()
-        # self.trackSprite.draw()
-        # self.car.show()
-        #
-        # for w in self.walls:
-        #     w.draw()
-        # # for g in self.gates:
-        # #     g.draw()
-        # vision = self.car.getState()
-        #
-        # for i in range(len(vision)):
-        #
-        #     label = pyglet.text.Label("{}:  {}".format(i,vision[i]),
-        #                               font_name='Times New Roman',
-        #                               font_size=24,
-        #                               x=10, y=50*i+250,
-        #                               anchor_x='left', anchor_y='center')
-        #     label.draw()
-        # glPopMatrix()
 
-    """
-    called when window resized
-    """
-
-    def on_resize(self, width, height):
-        glViewport(0, 0, width, height)
-
-    """
-    called every frame
-    """
 
     def update(self, dt):
         for i in range(5):
-
             if self.ai.training:
                 self.ai.train()
             else:
                 self.ai.test()
                 return
-        # self.car.update()
+        pass
+
 
 
 if __name__ == "__main__":
