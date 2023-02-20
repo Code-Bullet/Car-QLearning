@@ -5,7 +5,7 @@ import math
 class Drawer:
 
     def __init__(self):
-        self.color = [0, 0, 0]
+        self.color = [100, 0, 0]
         self.lineThickness = 1
 
     def setLineThinkness(self, thinkness):

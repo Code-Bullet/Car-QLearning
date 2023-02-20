@@ -10,7 +10,7 @@ vec2 = pygame.math.Vector2
 
 class Game:
     no_of_actions = 9
-    state_size = 20 #self.nbVect + 4
+    state_size = 15
 
     def __init__(self):
         trackImg = pyglet.image.load('Track.png')
@@ -120,17 +120,17 @@ class Game:
         self.gates.append(RewardGate(295, 920, 361, 864))
         self.gates.append(RewardGate(238, 766, 309, 754))
 
+
     def new_episode(self):
         self.car.reset()
 
     def get_state(self):
         return self.car.getState()
-        pass
 
     def make_action(self, action):
         # returns reward
-        #actionNo = np.argmax(action)
-        self.car.updateWithAction(action)
+        actionNo = np.argmax(action)
+        self.car.updateWithAction(actionNo)
         return self.car.reward
 
     def is_episode_finished(self):
@@ -150,11 +150,11 @@ class Game:
             w.draw()
         for g in self.gates:
             g.draw()
+        self.car.update()
         self.car.show()
-        #self.car.showCollisionVectors()
+        self.car.showCollisionVectors()
 
         glPopMatrix()
-
 
 class Wall:
 
@@ -166,7 +166,6 @@ class Wall:
 
         self.line = Line(self.x1, self.y1, self.x2, self.y2)
         self.line.setLineThinkness(5)
-        self.line.setColor([255, 0, 0])
 
     """
     draw the line
@@ -195,7 +194,6 @@ class Wall:
             j = j % 4
             if linesCollided(self.x1, self.y1, self.x2, self.y2, carCorners[i].x, carCorners[i].y, carCorners[j].x,
                              carCorners[j].y):
-                #print("u ded")
                 return True
         return False
 
@@ -216,7 +214,7 @@ class RewardGate:
         self.active = True
 
         self.line = Line(self.x1, self.y1, self.x2, self.y2)
-        self.line.setLineThinkness(1)
+        self.line.setLineThinkness(5)
         self.line.setColor([0, 255, 0])
 
         self.center = vec2((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
@@ -234,6 +232,7 @@ class RewardGate:
     """
 
     def hitCar(self, car):
+
         if not self.active:
             return False
 
@@ -259,13 +258,15 @@ class RewardGate:
 
 
 
+
+
 class Car:
 
     def __init__(self, walls, rewardGates):
         global vec2
         self.nbVect = 16
         self.angles = np.linspace(-180, 180, self.nbVect)
-        self.x = 258
+        self.x = 256
         self.y = 288
         self.vel = 0
         self.direction = vec2(0, 1)
@@ -276,7 +277,7 @@ class Car:
         self.turningRate = 5.0 / self.width
         self.friction = 0.98
         self.maxSpeed = self.width / 4.0
-        self.maxReverseSpeed = self.maxSpeed / 16.0   #used as a minimum for speed
+        self.maxReverseSpeed = -1 #self.maxSpeed / 16.0 is used as a minimum for speed
         self.accelerationSpeed = self.width / 160.0
         self.dead = False
         self.driftMomentum = 0
@@ -310,7 +311,7 @@ class Car:
 
     def reset(self):
         global vec2
-        self.x = 258
+        self.x = 256
         self.y = 288
         self.vel = 0
         self.direction = vec2(0, 1)
@@ -334,7 +335,6 @@ class Car:
             g.active = True
 
     def show(self):
-        #print(self.x,self.y)
         # first calculate the center of the car in order to allow the
         # rotation of the car to be anchored around the center
         upVector = self.direction.rotate(90)
@@ -361,7 +361,6 @@ class Car:
         return vec2(self.x, self.y) + ((rightVector * right) + (upVector * up))
 
     def updateWithAction(self, actionNo):
-        #print("action number : " + str(actionNo))
         self.turningLeft = False
         self.turningRight = False
         self.accelerating = False
@@ -400,7 +399,6 @@ class Car:
 
                 if self.hitAWall():
                     self.dead = True
-                    #print("dead at x: " + str(self.x) + " y : " + str(displayHeight - self.y) + "u lived for : " + str(self.lifespan) + " reward : " + str(self.score))
                     # return
                 self.checkRewardGates()
                 totalReward += self.reward
@@ -521,6 +519,7 @@ class Car:
     def hitAWall(self):
         for wall in self.walls:
             if wall.hitCar(self):
+                #print(self.x,self.y)
                 return True
 
         return False
@@ -553,7 +552,8 @@ class Car:
         self.setVisionVectors()
         normalizedVisionVectors = [1 - (max(1.0, line) / self.vectorLength) for line in self.collisionLineDistances]
 
-        normalizedForwardVelocity = max(0, (self.vel-self.maxReverseSpeed) / (self.maxSpeed-self.maxReverseSpeed))
+        normalizedForwardVelocity = max(0.0, self.vel / self.maxSpeed)
+        normalizedReverseVelocity = max(0.0, self.vel / self.maxReverseSpeed)
         if self.driftMomentum > 0:
             normalizedPosDrift = self.driftMomentum / 5
             normalizedNegDrift = 0
@@ -567,15 +567,15 @@ class Car:
 
         normalizedAngleOfNextGate /= 180
 
-        normalizedState = [*normalizedVisionVectors, normalizedForwardVelocity,
+        normalizedState = [*normalizedVisionVectors, normalizedForwardVelocity, normalizedReverseVelocity,
                            normalizedPosDrift, normalizedNegDrift, normalizedAngleOfNextGate]
         return np.array(normalizedState)
 
     def setVisionVectors(self):
         self.collisionLineDistances = []
         self.lineCollisionPoints = []
-        for i in self.angles:
-            self.setVisionVector(0, 0, i)
+        for i in self.angles :
+            self.setVisionVector(0,0,i)
 
     """
     calculates and stores the distance to the nearest wall given a vector 
